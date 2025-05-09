@@ -3,113 +3,100 @@
 module Zoom
   module Actions
     module Webinar
+      extend Zoom::Actions
+
       RECURRENCE_KEYS = %i[type repeat_interval weekly_days monthly_day monthly_week
-                           monthly_week_day end_times end_date_time].freeze
-      SETTINGS_KEYS = %i[panelists_video practice_session hd_video approval_type
-                         registration_type audio auto_recording enforce_login
-                         enforce_login_domains alternative_hosts close_registration
-                         show_share_button allow_multiple_devices registrants_confirmation_email].freeze
-      def webinar_list(*args)
-        params = Zoom::Params.new(Utils.extract_options!(args))
-        params.require(:host_id).permit(:page_size, :page_number)
-        Utils.parse_response self.class.get("/users/#{params[:host_id]}/webinars", query: params, headers: request_headers)
-      end
+                            monthly_week_day end_times end_date_time].freeze
+      SETTINGS_KEYS = [
+                        %i[
+                          host_video panelists_video practice_session hd_video approval_type
+                          registration_type audio auto_recording enforce_login
+                          enforce_login_domains alternative_hosts close_registration
+                          show_share_button allow_multiple_devices on_demand
+                          request_permission_to_unmute_participants global_dial_in_countries
+                          contact_name contact_email registrants_restrict_number
+                          post_webinar_survey survey_url registrants_email_notification
+                          meeting_authentication authentication_option
+                          authentication_domains registrants_confirmation_email
+                        ],
+                        {
+                          language_interpretation: [
+                            :enable,
+                            interpreters: %i[email languages]
+                          ],
+                          question_and_answer: %i[
+                            allow_anonymous_questions answer_questions attendees_can_comment
+                            attendees_can_upvote enable
+                          ],
+                          attendees_and_panelists_reminder_email_notification: %i[enable type],
+                          follow_up_absentees_email_notification: %i[enable type],
+                          follow_up_attendees_email_notification: %i[enable type]
+                        }
+                      ].freeze
 
-      def webinar_create(*args)
-        params = Zoom::Params.new(Utils.extract_options!(args))
-        params.require(:host_id).permit(:topic, :type, :start_time, :duration,
-                                        :timezone, :password, :agenda,
-                                        recurrence: RECURRENCE_KEYS,
-                                        settings: SETTINGS_KEYS)
-        # process recurrence keys based on constants
-        # process settings keys based on constants
-        Utils.parse_response self.class.post("/users/#{params[:host_id]}/webinars", body: params.except(:host_id).to_json, headers: request_headers)
-      end
+      get 'webinar_list', '/users/:host_id/webinars',
+        permit: %i[page_size next_page_token]
 
-      def webinar_get(*args)
-        params = Zoom::Params.new(Utils.extract_options!(args))
-        params.require(:id)
-        Utils.parse_response self.class.get("/webinars/#{params[:id]}", headers: request_headers)
-      end
+      # TODO: process recurrence keys based on constants
+      # TODO: process settings keys based on constants
+      post 'webinar_create', '/users/:host_id/webinars',
+        permit: [
+          :topic, :type, :start_time, :duration, :timezone, :password, :agenda,
+          { recurrence: RECURRENCE_KEYS, settings: SETTINGS_KEYS }
+        ]
 
-      def webinar_update(*args)
-        params = Zoom::Params.new(Utils.extract_options!(args))
-        params.require(:id).permit(:topic, :type, :start_time, :duration,
-                                   :timezone, :password, :agenda,
-                                   recurrence: RECURRENCE_KEYS,
-                                   settings: SETTINGS_KEYS)
-        Utils.parse_response self.class.patch("/webinars/#{params[:id]}", body: params.except(:id).to_json, headers: request_headers)
-      end
+      get 'webinar_get', '/webinars/:id'
 
-      def webinar_delete(*args)
-        params = Zoom::Params.new(Utils.extract_options!(args))
-        params.require(:id).permit(:occurrence_id)
-        Utils.parse_response self.class.delete("/webinars/#{params[:id]}", query: params.except(:id), headers: request_headers)
-      end
+      patch 'webinar_update', '/webinars/:id',
+        permit: [
+          :topic, :type, :start_time, :duration, :timezone, :password, :agenda,
+          { recurrence: RECURRENCE_KEYS, settings: SETTINGS_KEYS }
+        ]
 
-      def webinar_status_update(*args)
-        # TODO: implement webinar_panelists_list
-        # params = Zoom::Params.new(Utils.extract_options!(args))
-        raise Zoom::NotImplemented, 'webinar_status_update is not yet implemented'
-      end
+      delete 'webinar_delete', '/webinars/:id',
+        permit: :occurrence_id
 
-      def webinar_panelists_list(*args)
-        # TODO: implement webinar_panelists_list
-        # params = Zoom::Params.new(Utils.extract_options!(args))
-        raise Zoom::NotImplemented, 'webinar_panelists_list is not yet implemented'
-      end
+      get 'webinar_registrants_list', '/webinars/:id/registrants',
+        permit: %i[occurrence_id status page_size page_number]
 
-      def webinar_panelist_add(*args)
-        # TODO: implement webinar_panelist_add
-        # params = Zoom::Params.new(Utils.extract_options!(args))
-        raise Zoom::NotImplemented, 'webinar_panelist_add is not yet implemented'
-      end
+      post 'webinar_registrant_add', '/webinars/:id/registrants',
+        require: %i[email first_name last_name],
+        permit: %i[
+          occurrence_ids address city country zip state phone industry org job_title
+          purchasing_time_frame role_in_purchase_process no_of_employees comments custom_questions
+        ]
 
-      def webinar_panelists_delete_all(*args)
-        # TODO: implement webinar_panelists_delete_all
-        # params = Zoom::Params.new(Utils.extract_options!(args))
-        raise Zoom::NotImplemented, 'webinar_panelists_delete_all is not yet implemented'
-      end
+      delete 'webinar_registrant_delete', '/webinars/:webinar_id/registrants/:registrant_id',
+        permit: :occurrence_id
 
-      def webinar_panelist_delete(*args)
-        # TODO: implement webinar_panelist_delete
-        # params = Zoom::Params.new(Utils.extract_options!(args))
-        raise Zoom::NotImplemented, 'webinar_panelist_delete is not yet implemented'
-      end
+      put 'webinar_registrants_status_update', '/webinars/:id/registrants/status',
+        require: :action,
+        permit: [ :occurrence_id, registrants: [] ]
 
-      def webinar_registrants_list(*args)
-        params = Zoom::Params.new(Utils.extract_options!(args))
-        params.require(:id).permit(%i[occurrence_id status page_size page_number])
-        Utils.parse_response self.class.get("/webinars/#{params[:id]}/registrants", query: params.except(:id), headers: request_headers)
-      end
+      get 'past_webinar_list', '/past_webinars/:id/instances'
 
-      def webinar_registrant_add(*args)
-        params = Zoom::Params.new(Utils.extract_options!(args))
-        params.require(:id, :email, :first_name, :last_name)
-              .permit(%i[occurrence_ids address city country zip state phone
-                         industry org job_title purchasing_time_frame role_in_purchase_process
-                         no_of_employees comments custom_questions])
-        Utils.parse_response self.class.post("/webinars/#{params[:id]}/registrants", body: params.except(:id, :occurrence_ids).to_json, query: params.slice(:occurrence_ids), headers: request_headers)
-      end
+      get 'webinar_registrant_get', '/webinars/:webinar_id/registrants/:id',
+        permit: :occurrence_id
 
-      def webinar_registrants_status_update(*args)
-        params = Zoom::Params.new(Utils.extract_options!(args))
-        params.require(:id, :action)
-              .permit(:occurrence_id, registrants: [])
-        Utils.parse_response self.class.put("/webinars/#{params[:id]}/registrants/status", body: params.except(:id, :occurrence_ids).to_json, query: params.slice(:occurrence_ids), headers: request_headers)
-      end
+      get 'webinar_polls_list', '/webinars/:webinar_id/polls'
 
-      def past_webinar_list(*args)
-        params = Zoom::Params.new(Utils.extract_options!(args))
-        params.require(:id)
-        Utils.parse_response self.class.get("/past_webinars/#{params[:id]}/instances", headers: request_headers)
-      end
+      get 'webinar_poll_get', '/webinars/:webinar_id/polls/:poll_id'
 
-      def webinar_registrant_get(*args)
-        params = Zoom::Params.new(Utils.extract_options!(args))
-        params.require(:webinar_id, :id).permit(:occurrence_id)
-        Utils.parse_response self.class.get("/webinars/#{params[:webinar_id]}/registrants/#{params[:id]}", query: params.except(:webinar_id, :id), headers: request_headers)
-      end
+      get 'webinar_panelist_list', '/webinars/:webinar_id/panelists'
+
+      post 'webinar_panelist_add', '/webinars/:webinar_id/panelists',
+        require: :panelists,
+        permit: [ panelists: [] ]
+
+      delete 'webinar_panelist_delete', '/webinars/:webinar_id/panelists/:panelist_id'
+
+      delete 'webinar_panelists_delete_all', '/webinars/:webinar_id/panelists'
+
+      get 'past_webinars_absentees', '/past_webinars/:webinar_uuid/absentees',
+        permit: %i[occurrence_id page_size next_page_token]
+
+      get 'past_webinars_participants', '/past_webinars/:webinar_id/participants',
+        permit: %i[page_size next_page_token]
     end
   end
 end

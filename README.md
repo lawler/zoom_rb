@@ -1,4 +1,4 @@
-# zoom_rb [![CircleCI](https://circleci.com/gh/hintmedia/zoom_rb.svg?style=svg)](https://circleci.com/gh/hintmedia/zoom_rb) [![Maintainability](https://api.codeclimate.com/v1/badges/f41fdd0c73fd39c6732a/maintainability)](https://codeclimate.com/github/hintmedia/zoom_rb/maintainability) [![Test Coverage](https://api.codeclimate.com/v1/badges/f41fdd0c73fd39c6732a/test_coverage)](https://codeclimate.com/github/hintmedia/zoom_rb/test_coverage)
+# zoom_rb [![Coverage Status](https://coveralls.io/repos/github/kyleboe/zoom_rb/badge.svg?branch=main)](https://coveralls.io/github/kyleboe/zoom_rb?branch=main) [![Maintainability](https://api.codeclimate.com/v1/badges/8b8d168aa7e9d3d004f6/maintainability)](https://codeclimate.com/github/kyleboe/zoom_rb/maintainability) [![Gem Version](https://badge.fury.io/rb/zoom_rb.svg)](https://badge.fury.io/rb/zoom_rb)
 
 Ruby wrapper gem for zoom.us API (currently `v2`)
 
@@ -18,11 +18,9 @@ Or install it yourself as:
 
 ## Usage
 
-The Zoom API uses OAuth or JWT to [Authenticate](https://marketplace.zoom.us/docs/api-reference/Authentication) API request. By defaut, a JWT client will be used.
+The Zoom API uses OAuth or JWT to [Authenticate](https://marketplace.zoom.us/docs/api-reference/Authentication) API request. By default, a JWT client will be used.
 
 ```ruby
-require 'zoom'
-
 Zoom.configure do |c|
   c.api_key = 'xxx'
   c.api_secret = 'xxx'
@@ -40,14 +38,12 @@ https://zoom.us/oauth/authorize?response_type=code&client_id=7lstjKqdwjett_kwjwD
 
 Which will result in a redirect to your app with code in the url params
 
-then use this code to get an access token and a refresh token, the auth token is base64(client_id:client_secret).
+then use this code to get an access token and a refresh token.
 
 ```ruby
-require 'zoom'
+auth = Zoom::Client::OAuth.new(auth_code: auth_code, redirect_uri: redirect_uri, timeout: 15).auth
 
-client = Zoom::Client::OAuth.new(auth_token: auth_token, auth_code: auth_code, timeout: 15).auth
-
-zoom_client = Zoom::Client::OAuth.new(access_token: 'xxx', timeout: 15)
+zoom_client = Zoom::Client::OAuth.new(access_token: auth['access_token'], timeout: 15)
 ```
 
 You can also make a call to refresh with auth using an auth_token and a refresh_token

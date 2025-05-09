@@ -11,23 +11,39 @@ module Zoom
         name ? ArgumentError.new("Unrecognized parameter #{name}") : ArgumentError.new
       end
 
-      def raise_if_error!(response)
-        if response&.[]('code') && response['code'] >= 300
-          error_hash = { base: response['message']}
-          raise Error, error_hash unless response['errors']
-          error_hash[response['message']] = response['errors']
-          raise Error, error_hash
+      def raise_error(response, http_code=nil)
+        code = response['code']
+        message = response['message']
+        errors = response['errors']
+
+        case http_code
+        when 400
+          raise BadRequest.new(message, code, errors)
+        when 401
+          raise Unauthorized.new(message, code, errors)
+        when 403
+          raise Forbidden.new(message, code, errors)
+        when 404
+          raise NotFound.new(message, code, errors)
+        when 409
+          raise Conflict.new(message, code, errors)
+        when 429
+          raise TooManyRequests.new(message, code, errors)
+        when 500
+          raise InternalServerError.new(message, code, errors)
         else
-          response
+          raise Error.new(message, code, errors)
         end
       end
 
       def parse_response(http_response)
-        raise_if_error!(http_response.parsed_response) || http_response.code
+        return http_response.parsed_response || http_response.code if http_response.success?
+        raise_error(http_response.parsed_response, http_response.code)
       end
 
       def extract_options!(array)
-        array.last.is_a?(::Hash) ? array.pop : {}
+        params = array.last.is_a?(::Hash) ? array.pop : {}
+        process_datetime_params!(params)
       end
 
       def validate_password(password)
@@ -35,14 +51,16 @@ module Zoom
         raise(Error , 'Invalid Password') unless password[password_regex].nil?
       end
 
-      def process_datetime_params!(params, options)
-        params = [params] unless params.is_a? Array
-        params.each do |param|
-          if options[param] && options[param].kind_of?(Time)
-            options[param] = options[param].strftime('%FT%TZ')
+      def process_datetime_params!(params)
+        params.each do |key, value|
+          case key
+          when Symbol, String
+            params[key] = value.is_a?(Time) ? value.strftime('%FT%TZ') : value
+          when Hash
+            process_datetime_params!(params[key])
           end
         end
-        options
+        params
       end
     end
   end

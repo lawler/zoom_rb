@@ -3,100 +3,90 @@
 module Zoom
   module Actions
     module Meeting
+      extend Zoom::Actions
+
       # List all the scheduled meetings on Zoom.
-      def meeting_list(*args)
-        options = Zoom::Params.new(Utils.extract_options!(args))
-        options.require(%i[user_id])
-        Utils.parse_response self.class.get("/users/#{options[:user_id]}/meetings", query: options.except(:user_id), headers: request_headers)
-      end
+      get 'meeting_list', '/users/:user_id/meetings',
+        permit: %i[type page_size next_page_token page_number]
 
       # Create a meeting on Zoom, return the created meeting URL
-      def meeting_create(*args)
-        options = Zoom::Params.new(Utils.extract_options!(args))
-        options.require(%i[user_id])
-        Utils.process_datetime_params!(:start_time, options)
-        Utils.parse_response self.class.post("/users/#{options[:user_id]}/meetings", body: options.except(:user_id).to_json, headers: request_headers)
-      end
+      post 'meeting_create', '/users/:user_id/meetings',
+        permit: %i[
+          topic type start_time duration schedule_for timezone password default_password agenda tracking_fields
+          recurrence settings template_id pre_schedule waiting_room
+        ]
 
       # Get a meeting on Zoom via meeting ID, return the meeting info.
-      def meeting_get(*args)
-        options = Zoom::Params.new(Utils.extract_options!(args))
-        options.require(%i[meeting_id])
-        Utils.parse_response self.class.get("/meetings/#{options[:meeting_id]}", headers: request_headers)
-      end
+      get 'meeting_get', '/meetings/:meeting_id/',
+        permit: %i[occurrence_id show_previous_occurrences]
 
       # Update meeting info on Zoom via meeting ID.
-      def meeting_update(*args)
-        options = Zoom::Params.new(Utils.extract_options!(args))
-        options.require(%i[meeting_id])
-        Utils.process_datetime_params!(:start_time, options)
-        # TODO Handle `topic` attr, Max of 300 characters.
-        # TODO Handle `timezone` attr, refer to the id value in timezone list JSON file. like "America/Los_Angeles"
-        # TODO Verify `password` attr, may only contain the following characters: a-z A-Z 0-9 @ - _
-        # TODO Handle `option_audio` attr, Can be "both", "telephony", "voip".
-        # TODO Handle `option_auto_record_type`, Can be "local", “cloud” or "none".
-        Utils.parse_response self.class.patch("/meetings/#{options[:meeting_id]}", body: options.except(:meeting_id).to_json, headers: request_headers)
-      end
+      # TODO Handle `topic` attr, Max of 300 characters.
+      # TODO Handle `timezone` attr, refer to the id value in timezone list JSON file. like "America/Los_Angeles"
+      # TODO Verify `password` attr, may only contain the following characters: a-z A-Z 0-9 @ - _
+      # TODO Handle `option_audio` attr, Can be "both", "telephony", "voip".
+      # TODO Handle `option_auto_record_type`, Can be "local", “cloud” or "none".
+      patch 'meeting_update', '/meetings/:meeting_id'
 
       # Delete a meeting on Zoom, return the deleted meeting ID.
-      def meeting_delete(*args)
-        options = Zoom::Params.new(Utils.extract_options!(args))
-        options.require(%i[meeting_id])
-        Utils.parse_response self.class.delete("/meetings/#{options[:meeting_id]}", query: options.except(:meeting_id), headers: request_headers)
-      end
+      delete 'meeting_delete', '/meetings/:meeting_id'
 
       # Update a meeting's status
-      def meeting_update_status(*args)
-        options = Zoom::Params.new(Utils.extract_options!(args))
-        options.require(%i[meeting_id])
-        Utils.parse_response self.class.put("/meetings/#{options[:meeting_id]}/status", body: options.except(:meeting_id).to_json, headers: request_headers)
-      end
+      put 'meeting_update_status', '/meetings/:meeting_id/status',
+        permit: :action
 
-      # End a meeting on Zoom, return the deleted meeting ID.
-      def meeting_end(*args)
-        options = Utils.extract_options!(args)
-        meeting_update_status(options.merge(action: 'end'))
-      end
-
-      # Lists the live meetings on Zoom.
-      def meeting_live(*args)
-        options = Utils.extract_options!(args)
-        meeting_list(options.merge(type: 'live'))
-      end
+      # Update registrant's status
+      put 'meeting_registrants_status_update', '/meetings/:meeting_id/registrants/status',
+          require: :action,
+          permit: [ :occurrence_id, registrants: [] ]
 
       # Register for a meeting.
-      def meeting_register(*args)
-        options = Zoom::Params.new(Utils.extract_options!(args))
-        options.require(%i[meeting_id email first_name last_name])
-        Utils.parse_response self.class.post("/meetings/#{options[:meeting_id]}/registrants", body: options.except(:meeting_id).to_json, headers: request_headers)
-      end
+      post 'meeting_add_registrant', '/meetings/:meeting_id/registrants',
+        require: %i[email first_name],
+        permit: %i[
+          last_name address city country zip state phone industry org job_title
+          purchasing_time_frame role_in_purchase_process no_of_employees comments custom_questions
+          language occurrence_ids auto_approve
+        ]
+
+      # Get a meeting registrant
+      get 'meeting_get_registrant', '/meetings/:meeting_id/registrants/:registrant_id'
+
+      # Delete a meeting registrant.
+      delete 'meeting_delete_registrant', '/meetings/:meeting_id/registrants/:registrant_id'
+
+      # Register up to 30 registrants at once for a meeting that requires registration.
+      post 'batch_registrants', '/meetings/:meeting_id/batch_registrants',
+        permit: %i[registrants auto_approve registrants_confirmation_email]
 
       # Register for a meeting.
-      def meeting_registrant_questions(*args)
-        options = Zoom::Params.new(Utils.extract_options!(args))
-        options.require(%i[meeting_id])
-        Utils.parse_response self.class.patch("/meetings/#{options[:meeting_id]}/registrants/questions", body: options.except(:meeting_id).to_json, headers: request_headers)
-      end
+      patch 'meeting_registrant_questions', '/meeting/:meeting_id/registrants/questions'
+
+      # List users that have registered for a meeting.
+      get 'list_meeting_registrants', '/meetings/:meeting_id/registrants',
+        permit: %i[occurrence_id status page_size next_page_token]
 
       # Retrieve ended meeting details
-      def past_meeting_details(*args)
-        options = Zoom::Params.new(Utils.extract_options!(args))
-        options.require(%i[meeting_uuid])
-        Utils.parse_response self.class.get("/past_meetings/#{options[:meeting_uuid]}", headers: request_headers)
-      end
+      get 'past_meeting_details', '/past_meetings/:meeting_uuid'
+
+      # Retrieve past meeting instances
+      get 'past_meeting_instances', '/past_meetings/:meeting_id/instances'
 
       # Retrieve ended meeting participants
-      def past_meeting_participants(*args)
-        options = Zoom::Params.new(Utils.extract_options!(args))
-        options.require(%i[meeting_uuid])
-        Utils.parse_response self.class.get("/past_meetings/#{options[:meeting_uuid]}/participants", headers: request_headers)
-      end
+      get 'past_meeting_participants', '/past_meetings/:meeting_uuid/participants'
 
-      def livestream(*args)
-        options = Zoom::Params.new(Utils.extract_options!(args))
-        options.require(%i[meeting_id stream_url stream_key]).permit(%i[page_url])
-        Utils.parse_response self.class.patch("/meetings/#{options[:meeting_id]}/livestream", body: options.except(:meeting_id), headers: request_headers)
-      end
+      patch 'livestream', '/meetings/:meeting_id/livestream',
+        require: %i[stream_url stream_key],
+        permit: :page_url
+
+      # Get a meeting on Zoom via meeting ID, return the meeting info.
+      get 'meeting_invitation', '/meetings/:meeting_id/invitation'
+
+      # Support for meeting surveys
+      # https://developers.zoom.us/docs/api/rest/reference/zoom-api/methods/#operation/meetingSurveyGet
+      get "meeting_survey", "/meetings/:meeting_id/survey"
+      delete "meeting_delete_survey", "/meetings/:meeting_id/survey"
+      patch "meeting_update_survey", "/meetings/:meeting_id/survey"
     end
   end
 end

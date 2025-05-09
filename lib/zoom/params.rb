@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+require 'delegate'
 
 module Zoom
   class Params < SimpleDelegator
@@ -7,10 +8,10 @@ module Zoom
       super
     end
 
-    def require(*keys)
-      missing_keys = find_missing_keys(keys.flatten)
-      return self.class.new(except(keys)) if missing_keys.empty?
-      raise Zoom::ParameterMissing, missing_keys.to_s
+    def require(*entries)
+      missing_entries = find_missing_entries(entries)
+      return filter_required(entries.flatten) if missing_entries.empty?
+      raise Zoom::ParameterMissing, missing_entries.to_s
     end
 
     def require_one_of(*keys)
@@ -23,7 +24,7 @@ module Zoom
     end
 
     def permit(*filters)
-      permitted_keys = filters.flatten.each_with_object([]) do |filter, array|
+      permitted_keys = filters.flatten.each.with_object([]) do |filter, array|
                          case filter
                          when Symbol, String
                            array << filter
@@ -31,7 +32,7 @@ module Zoom
                            array << hash_filter(filter)
                          end
                        end
-      non_permitted_params = @parameters.keys - permitted_keys.flatten
+      non_permitted_params = parameters_keys - permitted_keys.flatten
       raise Zoom::ParameterNotPermitted, non_permitted_params.to_s unless non_permitted_params.empty?
     end
 
@@ -60,15 +61,42 @@ module Zoom
       filter.keys
     end
 
-    def find_matching_keys(keys)
-      keys.flatten.each_with_object([]) do |key, array|
-        array << key if self[key]
+    def filter_required(filters)
+      # Unless value is a hash, filter
+      filters.each.with_object(self.class.new(except(filters.flatten))) do |filter, params|
+        case filter
+        when Symbol, String
+          params.delete(filter)
+        when Hash
+          filter.each do |k, v|
+            nested_filter = self.class.new(self[k]).filter_required(v)
+            if nested_filter.empty?
+              params.delete(k)
+            else
+              params[k] = nested_filter
+            end
+          end
+        end
       end
     end
 
-    def find_missing_keys(keys)
-      keys.each_with_object([]) do |k, array|
-        array << k if self[k].nil?
+    def find_missing_entries(*entries)
+      entries.flatten.each.with_object([]) do |entry, array|
+        if entry.is_a?(Hash)
+          entry.keys.each do |k|
+            array << k && next if self[k].nil?
+            missing_entries = self.class.new(self[k]).find_missing_entries(*entry[k])
+            array << { k => missing_entries } unless missing_entries.empty?
+          end
+        elsif self[entry].nil?
+          array << entry
+        end
+      end
+    end
+
+    def find_matching_keys(keys)
+      keys.flatten.each_with_object([]) do |key, array|
+        array << key if self[key]
       end
     end
 
@@ -76,6 +104,14 @@ module Zoom
       value = @parameters[key]
       unless !value || values.include?(value)
         raise Zoom::ParameterValueNotPermitted, "#{key}: #{value}"
+      end
+    end
+
+    def parameters_keys
+      if @parameters.kind_of?(Array)
+        @parameters.map(&:keys).flatten.uniq
+      else
+        @parameters.keys
       end
     end
   end

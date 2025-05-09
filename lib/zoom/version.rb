@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
 module Zoom
-  VERSION = '0.10.0'
+  VERSION = '1.2.0'
 end
